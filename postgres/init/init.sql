@@ -1,5 +1,5 @@
 -- Создаю базу wallets
-CREATE DATABASE IF NOT EXISTS "wallets"
+CREATE DATABASE "wallets"
     WITH
     OWNER = postgres
     ENCODING = 'UTF8'
