@@ -13,7 +13,7 @@ from main import app
 from apps.database.database import get_db
 from apps.wallets.models import Base
 
-TEST_DATABASE_URL = "postgresql://test_user:test_password@test_db:5432/test_wallets"
+TEST_DATABASE_URL = "postgresql://test_user:test_password@test_db:5433/test_wallets"
 
 engine = create_engine(TEST_DATABASE_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
