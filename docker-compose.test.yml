@@ -35,7 +35,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-test_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-test_password}
       POSTGRES_DB: ${POSTGRES_DB:-test_wallets}
-      POSTGRES_HOST: postgres
+      POSTGRES_HOST: test_db
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
       TZ: Europe/Moscow
       PYTHONUNBUFFERED: 1
@@ -50,7 +50,7 @@ services:
       GUNICORN_ERROR_LOG: "-"
       GUNICORN_LOG_LEVEL: info
     healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://postgres:8000/health" ]
+      test: [ "CMD-SHELL", "curl -f http://test_db:8000/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
