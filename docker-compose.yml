@@ -1,0 +1,102 @@
+version: "3"
+
+services:
+
+  postgres:
+    image: postgres:18-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+      POSTGRES_DB: ${POSTGRES_DB:-wallets}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      TZ: ${TZ:-Europe/Moscow}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d/
+    command: >
+      postgres
+      -c max_connections=100
+      -c shared_buffers=256MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+      -c logging_collector=on
+      -c log_directory=log
+      -c log_filename=postgresql-%Y-%m-%d_%H%M%S.log
+      -c log_rotation_age=1d
+      -c log_rotation_size=100MB
+      -c log_min_duration_statement=1000
+      -c wal_level=replica
+      -c max_wal_size=1GB
+      -c min_wal_size=80MB
+      -c archive_mode=off
+      -c effective_cache_size=512MB
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c autovacuum=on
+      -c autovacuum_max_workers=3
+      -c autovacuum_naptime=1min
+      -c track_activities=on
+      -c track_counts=on
+      -c track_io_timing=on
+      -c shared_preload_libraries=pg_stat_statements
+      -c pg_stat_statements.track=all
+    restart: unless-stopped
+    stdin_open: true
+    shm_size: 128mb
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  wallet_app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wallet_app
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+      POSTGRES_DB: ${POSTGRES_DB:-wallets}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      TZ: Europe/Moscow
+      PYTHONUNBUFFERED: 1
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-1}
+      GUNICORN_WORKER_CLASS: uvicorn.workers.UvicornWorker
+      GUNICORN_TIMEOUT: 60
+      GUNICORN_KEEPALIVE: 5
+      GUNICORN_MAX_REQUESTS: 1000
+      GUNICORN_MAX_REQUESTS_JITTER: 50
+      GUNICORN_GRACEFUL_TIMEOUT: 30
+      GUNICORN_ACCESS_LOG: "-"
+      GUNICORN_ERROR_LOG: "-"
+      GUNICORN_LOG_LEVEL: info
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://postgres:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      - postgres
+    networks:
+      - postgres
+    command: >
+      sh -c "
+        echo 'Running in production mode with Gunicorn...';
+        alembic upgrade head;
+        gunicorn main:app --bind 0.0.0.0:8000 --workers $$GUNICORN_WORKERS --worker-class $$GUNICORN_WORKER_CLASS --timeout $$GUNICORN_TIMEOUT --keep-alive $$GUNICORN_KEEPALIVE --max-requests $$GUNICORN_MAX_REQUESTS --max-requests-jitter $$GUNICORN_MAX_REQUESTS_JITTER --graceful-timeout $$GUNICORN_GRACEFUL_TIMEOUT --access-logfile $$GUNICORN_ACCESS_LOG --error-logfile $$GUNICORN_ERROR_LOG --log-level $$GUNICORN_LOG_LEVEL;
+      "
+    ports:
+      - "8000:8000"
+
+networks:
+  postgres:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local

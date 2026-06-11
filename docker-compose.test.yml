@@ -1,0 +1,26 @@
+version: "3"
+
+services:
+  test_db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: test_wallets
+    ports:
+      - "5432:5432"
+
+  tests:
+    build: .
+    depends_on:
+      - test_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-test_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-test_password}
+      POSTGRES_DB: ${POSTGRES_DB:-test_wallets}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+#      DATABASE_URL: postgresql://test_user:test_password@test_db:5432/test_wallets
+    command: >
+      sh -c "alembic upgrade head &&
+             pytest -v --tb=short apps/tests/"
