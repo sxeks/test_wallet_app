@@ -16,6 +16,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql
       - ./postgres/init:/docker-entrypoint-initdb.d/
+    networks:
+      - postgres
     command: >
       postgres
       -c max_connections=100
