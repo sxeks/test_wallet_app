@@ -9,9 +9,26 @@ services:
       POSTGRES_DB: test_wallets
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data_test:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d/
+    networks:
+      - test_db
+    command: ["postgres"]
+    restart: unless-stopped
+    stdin_open: true
+    shm_size: 128mb
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   tests:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: test_wallet_app
     depends_on:
       - test_db
     environment:
@@ -20,7 +37,36 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-test_wallets}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
-#      DATABASE_URL: postgresql://test_user:test_password@test_db:5432/test_wallets
+      TZ: Europe/Moscow
+      PYTHONUNBUFFERED: 1
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-1}
+      GUNICORN_WORKER_CLASS: uvicorn.workers.UvicornWorker
+      GUNICORN_TIMEOUT: 60
+      GUNICORN_KEEPALIVE: 5
+      GUNICORN_MAX_REQUESTS: 1000
+      GUNICORN_MAX_REQUESTS_JITTER: 50
+      GUNICORN_GRACEFUL_TIMEOUT: 30
+      GUNICORN_ACCESS_LOG: "-"
+      GUNICORN_ERROR_LOG: "-"
+      GUNICORN_LOG_LEVEL: info
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://postgres:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - test_db
     command: >
-      sh -c "alembic upgrade head &&
-             pytest -v --tb=short apps/tests/"
+      sh -c "
+        echo 'Running tests in production mode with Gunicorn...';
+        alembic upgrade head;
+        pytest -v --tb=short apps/tests/;
+      "
+
+networks:
+  test_db:
+    driver: bridge
+
+volumes:
+  postgres_data_test:
+    driver: local
