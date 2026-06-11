@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: test_password
       POSTGRES_DB: test_wallets
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data_test:/var/lib/postgresql
       - ./postgres/init:/docker-entrypoint-initdb.d/
