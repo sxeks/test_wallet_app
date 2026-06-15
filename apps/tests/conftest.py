@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 import os
 import sys
+from time import sleep
 
 parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if parent_dir not in sys.path:
@@ -15,8 +16,18 @@ from apps.wallets.models import Base
 
 TEST_DATABASE_URL = "postgresql://test_user:test_password@test_db:5432/test_wallets"
 
-engine = create_engine(TEST_DATABASE_URL)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# postgres не успевает инициализироваться, поэтому оставляем
+# несколько попыток с задержкой в секунду
+
+counter = 10
+while True:
+    counter -= 1
+    try:
+        engine = create_engine(TEST_DATABASE_URL)
+        TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        break
+    except:
+        sleep(1)
 
 def override_get_db():
     db = TestingSessionLocal()
