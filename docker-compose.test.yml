@@ -58,7 +58,7 @@ services:
       - test_db
     command: >
       sh -c "
-        echo 'Running tests in production mode with Gunicorn...';
+        echo 'Running tests using pytest';
         alembic upgrade head;
         pytest -v --tb=short apps/tests/;
       "

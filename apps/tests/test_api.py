@@ -2,6 +2,8 @@ import uuid
 import concurrent.futures
 from decimal import Decimal
 from fastapi.testclient import TestClient
+from apps.wallets import crud, schemas, models
+from .conftest import TestingSessionLocal
 
 def test_get_balance_of_nonexistent_wallet(client: TestClient):
     response = client.get(f"/api/v1/wallets/{uuid.uuid4()}")
@@ -20,39 +22,63 @@ def test_deposit(client: TestClient):
     assert data["wallet_id"] == str(wallet_uuid)
     assert Decimal(data["balance"]) == Decimal("1000.00")
 
-def test_withdraw_insufficient_funds(client: TestClient):
+def test_withdraw_insufficient_funds(client):
     wallet_uuid = uuid.uuid4()
-    # Создаю кошелёк с нулевым балансом
-    response = client.post(
+    # Пополню на 100
+    resp = client.post(
         f"/api/v1/wallets/{wallet_uuid}/operation",
-        json={"operation_type": "DEPOSIT", "amount": "0.00"}
+        json={"operation_type": "DEPOSIT", "amount": "100.00"}
     )
-    assert response.status_code == 200
-    response = client.post(
+    assert resp.status_code == 200
+
+    # Пытаюсь снять 200
+    resp = client.post(
         f"/api/v1/wallets/{wallet_uuid}/operation",
-        json={"operation_type": "WITHDRAW", "amount": "100.00"}
+        json={"operation_type": "WITHDRAW", "amount": "200.00"}
     )
-    assert response.status_code == 409
+    assert resp.status_code == 409
 
-def test_concurrent_deposits(client: TestClient):
-    wallet_uuid = uuid.uuid4()
-    num_requests = 20
-    amount_per_request = Decimal("50.00")
+def test_concurrent_deposits():
+    wallet_id = uuid.uuid4()
 
-    def make_deposit():
-        return client.post(
-            f"/api/v1/wallets/{wallet_uuid}/operation",
-            json={"operation_type": "DEPOSIT", "amount": str(amount_per_request)}
+    # Создаю кошелёк с начальным депозитом
+    init_db = TestingSessionLocal()
+    try:
+        op = schemas.WalletOperation(
+            operation_type=schemas.OperationType.DEPOSIT,
+            amount=Decimal("0.01")   # >0
         )
+        crud.perform_operation(init_db, wallet_id, op)
+        init_db.commit()
+    finally:
+        init_db.close()
+
+    num_workers = 20
+    amount_per_worker = Decimal("50.00")
+
+    def worker():
+        db = TestingSessionLocal()
+        try:
+            op = schemas.WalletOperation(
+                operation_type=schemas.OperationType.DEPOSIT,
+                amount=amount_per_worker
+            )
+            success, _, _ = crud.perform_operation(db, wallet_id, op)
+            return success
+        finally:
+            db.close()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [executor.submit(make_deposit) for _ in range(num_requests)]
+        futures = [executor.submit(worker) for _ in range(num_workers)]
         results = [f.result() for f in futures]
 
-    assert all(r.status_code == 200 for r in results)
-    # Проверяю итоговый баланс
-    resp = client.get(f"/api/v1/wallets/{wallet_uuid}")
-    assert resp.status_code == 200
-    balance = Decimal(resp.json()["balance"])
-    expected = amount_per_request * num_requests
-    assert balance == expected
+    assert all(results)
+
+    # Проверяю финальный баланс
+    check_db = TestingSessionLocal()
+    try:
+        wallet = check_db.query(models.Wallet).filter(models.Wallet.id == wallet_id).first()
+        expected = Decimal("0.01") + amount_per_worker * num_workers
+        assert wallet.balance == expected
+    finally:
+        check_db.close()
