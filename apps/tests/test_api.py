@@ -3,7 +3,7 @@ import concurrent.futures
 from decimal import Decimal
 from fastapi.testclient import TestClient
 from apps.wallets import crud, schemas, models
-from .conftest import TestingSessionLocal
+from apps.tests.conftest import TestingSessionLocal
 
 def test_get_balance_of_nonexistent_wallet(client: TestClient):
     response = client.get(f"/api/v1/wallets/{uuid.uuid4()}")
