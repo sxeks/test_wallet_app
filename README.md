@@ -5,5 +5,3 @@ docker-compose up --build
 
 Для запуска тестов:
 docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit
-
-При проверке работоспособности на собственном сервере приходится запускать сервисы вручную по одному, так как postgres не успевает запускаться до старта приложения или тестов
