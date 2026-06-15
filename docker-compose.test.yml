@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: test_password
       POSTGRES_DB: test_wallets
     ports:
-      - "5433:5433"
+      - "5433:5432"
     volumes:
       - postgres_data_test:/var/lib/postgresql
       - ./postgres/init:/docker-entrypoint-initdb.d/
@@ -36,7 +36,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-test_password}
       POSTGRES_DB: ${POSTGRES_DB:-test_wallets}
       POSTGRES_HOST: test_db
-      POSTGRES_PORT: ${POSTGRES_PORT:-5433}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
       TZ: Europe/Moscow
       PYTHONUNBUFFERED: 1
       GUNICORN_WORKERS: ${GUNICORN_WORKERS:-1}
