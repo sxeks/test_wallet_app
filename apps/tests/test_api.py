@@ -22,7 +22,7 @@ def test_deposit(client: TestClient):
     assert data["wallet_id"] == str(wallet_uuid)
     assert Decimal(data["balance"]) == Decimal("1000.00")
 
-def test_withdraw_insufficient_funds(client):
+def test_withdraw_insufficient_funds(client: TestClient):
     wallet_uuid = uuid.uuid4()
     # Пополню на 100
     resp = client.post(
@@ -38,25 +38,21 @@ def test_withdraw_insufficient_funds(client):
     )
     assert resp.status_code == 409
 
-def test_concurrent_deposits():
+def test_concurrent_deposits(client: TestClient):
     wallet_id = uuid.uuid4()
 
-    # Создаю кошелёк с начальным депозитом
-    init_db = TestingSessionLocal()
-    try:
-        op = schemas.WalletOperation(
-            operation_type=schemas.OperationType.DEPOSIT,
-            amount=Decimal("0.01")   # >0
-        )
-        crud.perform_operation(init_db, wallet_id, op)
-        init_db.commit()
-    finally:
-        init_db.close()
+    # Создаю кошелёк через API с начальным депозитом
+    init_resp = client.post(
+        f"/api/v1/wallets/{wallet_id}/operation",
+        json={"operation_type": "DEPOSIT", "amount": "0.01"}
+    )
+    assert init_resp.status_code == 200
 
     num_workers = 20
     amount_per_worker = Decimal("50.00")
 
     def worker():
+        # Каждый поток получает свою сессию
         db = TestingSessionLocal()
         try:
             op = schemas.WalletOperation(
@@ -74,11 +70,8 @@ def test_concurrent_deposits():
 
     assert all(results)
 
-    # Проверяю финальный баланс
-    check_db = TestingSessionLocal()
-    try:
-        wallet = check_db.query(models.Wallet).filter(models.Wallet.id == wallet_id).first()
-        expected = Decimal("0.01") + amount_per_worker * num_workers
-        assert wallet.balance == expected
-    finally:
-        check_db.close()
+    # Проверяю итоговый баланс
+    resp = client.get(f"/api/v1/wallets/{wallet_id}")
+    assert resp.status_code == 200
+    expected = Decimal("0.01") + amount_per_worker * num_workers
+    assert Decimal(resp.json()["balance"]) == expected
